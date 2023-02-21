@@ -69,7 +69,13 @@ impl Scanner {
                     }
                     let s: String = char.iter().collect();
 
-                    Token::Var(s)
+                    match s.as_ref() {
+                        "and" => Token::And,
+                        "or" => Token::Or,
+                        "true" => Token::Boolean(true),
+                        "false" => Token::Boolean(false),
+                        _ => Token::Var(s),
+                    }
                 }
                 ch if ch.is_numeric() => {
                     let mut char = vec![ch];
@@ -150,6 +156,94 @@ mod tests {
                 Token::Var("age".to_owned()),
                 Token::EqualEqual,
                 Token::Integer(10),
+                Token::End
+            ],
+            tokens
+        );
+    }
+
+    #[test]
+    fn boolean_eq() {
+        let query = "active == false";
+        let tokens = Scanner::new().scan(query).unwrap();
+        assert_eq!(
+            vec![
+                Token::Var("active".to_owned()),
+                Token::EqualEqual,
+                Token::Boolean(false),
+                Token::End
+            ],
+            tokens
+        );
+
+        let query = "active==false";
+        let tokens = Scanner::new().scan(query).unwrap();
+        assert_eq!(
+            vec![
+                Token::Var("active".to_owned()),
+                Token::EqualEqual,
+                Token::Boolean(false),
+                Token::End
+            ],
+            tokens
+        );
+    }
+
+    #[test]
+    fn or_operator() {
+        let query = "name == \"Ricardo\" or age == 10";
+        let tokens = Scanner::new().scan(query).unwrap();
+        assert_eq!(
+            vec![
+                Token::Var("name".to_owned()),
+                Token::EqualEqual,
+                Token::String("Ricardo".to_owned()),
+                Token::Or,
+                Token::Var("age".to_owned()),
+                Token::EqualEqual,
+                Token::Integer(10),
+                Token::End
+            ],
+            tokens
+        );
+    }
+
+    #[test]
+    fn and_operator() {
+        let query = "name == \"Ricardo\" and age == 10";
+        let tokens = Scanner::new().scan(query).unwrap();
+        assert_eq!(
+            vec![
+                Token::Var("name".to_owned()),
+                Token::EqualEqual,
+                Token::String("Ricardo".to_owned()),
+                Token::And,
+                Token::Var("age".to_owned()),
+                Token::EqualEqual,
+                Token::Integer(10),
+                Token::End
+            ],
+            tokens
+        );
+    }
+
+    #[test]
+    fn and_or_operator() {
+        let query = "name == \"Ricardo\" and age == 10 or active == false";
+        let tokens = Scanner::new().scan(query).unwrap();
+        assert_eq!(
+            vec![
+                Token::Var("name".to_owned()),
+                Token::EqualEqual,
+                Token::String("Ricardo".to_owned()),
+                Token::And,
+                Token::Var("age".to_owned()),
+                Token::EqualEqual,
+                Token::Integer(10),
+                Token::Or,
+                Token::Var("active".to_owned()),
+                Token::EqualEqual,
+                Token::Boolean(false),
                 Token::End
             ],
             tokens
