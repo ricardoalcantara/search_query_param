@@ -1,5 +1,8 @@
 use mongodb::bson::{doc, Document};
-use std::{iter::Peekable, slice::Iter};
+use std::{
+    iter::{Extend, Peekable},
+    slice::Iter,
+};
 
 use crate::{
     error::{Result, SyntaxError},
@@ -73,7 +76,6 @@ enum Expression {
 impl Expression {
     fn eval(mut self) -> Result<Document> {
         match self {
-            // Expression::LogicalOperators(logical_operator, _, _) => Ok(()),
             Expression::ComparisonOperators(comparison_operator, field, value) => {
                 match comparison_operator {
                     ComparisonOperators::EqualEqual => match value {
@@ -93,6 +95,12 @@ impl Expression {
                     rhs.eval()?
                     ]
                 }),
+                LogicalOperators::And => {
+                    let mut d1 = expr.eval()?;
+                    let d2 = rhs.eval()?;
+                    d1.extend(d2);
+                    Ok(d1)
+                }
                 _ => Err(SyntaxError::new_parse_error(
                     "Invalid Expression".to_string(),
                 )),
@@ -181,6 +189,22 @@ impl<'a> Parser<'a> {
     fn or(&mut self) -> Result<Expression> {
         let mut expr: Expression = self.and()?;
 
+        while let Some(tok) = self.iter.peek() {
+            match tok {
+                Token::And => {
+                    self.iter.next();
+                    let rhs: Expression = self.and()?;
+
+                    expr = Expression::LogicalOperators(
+                        LogicalOperators::And,
+                        Box::new(expr),
+                        Box::new(rhs),
+                    )
+                }
+                _ => break,
+            }
+        }
+
         Ok(expr)
     }
 
@@ -206,7 +230,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn parse(mut self) -> Result<Expression> {
+    pub fn parse(mut self) -> Result<Expression> {
         // AKA Abstract Syntax Trees
         let ast = self.expression()?;
         self.assert_next(Token::End)?;
