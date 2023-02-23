@@ -206,6 +206,22 @@ mod tests {
             ],
             tokens
         );
+
+        let query = "name==\"Ricardo\" or age==10";
+        let tokens = Scanner::new().scan(query).unwrap();
+        assert_eq!(
+            vec![
+                Token::Var("name".to_owned()),
+                Token::EqualEqual,
+                Token::String("Ricardo".to_owned()),
+                Token::Or,
+                Token::Var("age".to_owned()),
+                Token::EqualEqual,
+                Token::Integer(10),
+                Token::End
+            ],
+            tokens
+        );
     }
 
     #[test]
@@ -225,11 +241,47 @@ mod tests {
             ],
             tokens
         );
+
+        let query = "name==\"Ricardo\" and age==10";
+        let tokens = Scanner::new().scan(query).unwrap();
+        assert_eq!(
+            vec![
+                Token::Var("name".to_owned()),
+                Token::EqualEqual,
+                Token::String("Ricardo".to_owned()),
+                Token::And,
+                Token::Var("age".to_owned()),
+                Token::EqualEqual,
+                Token::Integer(10),
+                Token::End
+            ],
+            tokens
+        );
     }
 
     #[test]
     fn and_or_operator() {
         let query = "name == \"Ricardo\" and age == 10 or active == false";
+        let tokens = Scanner::new().scan(query).unwrap();
+        assert_eq!(
+            vec![
+                Token::Var("name".to_owned()),
+                Token::EqualEqual,
+                Token::String("Ricardo".to_owned()),
+                Token::And,
+                Token::Var("age".to_owned()),
+                Token::EqualEqual,
+                Token::Integer(10),
+                Token::Or,
+                Token::Var("active".to_owned()),
+                Token::EqualEqual,
+                Token::Boolean(false),
+                Token::End
+            ],
+            tokens
+        );
+
+        let query = "name==\"Ricardo\" and age==10 or active==false";
         let tokens = Scanner::new().scan(query).unwrap();
         assert_eq!(
             vec![
