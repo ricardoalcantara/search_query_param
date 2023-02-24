@@ -14,6 +14,13 @@ pub fn parse_filter(query: &str) -> Result<Document> {
     parser.parse()?.eval()
 }
 
+pub fn parse_filter_whitelist(query: &str, whitelist: &Vec<&str>) -> Result<Document> {
+    let tokens = Scanner::new().scan(query)?;
+    let mut token_iter = tokens.iter().peekable();
+    let parser = Parser::new(&mut token_iter).set_whitelist(whitelist);
+    parser.parse()?.eval()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::parse_filter;

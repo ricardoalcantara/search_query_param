@@ -136,11 +136,20 @@ impl Expression {
 
 pub struct Parser<'a> {
     iter: &'a mut Peekable<Iter<'a, Token>>,
+    whitelist: Option<&'a Vec<&'a str>>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(iter: &'a mut Peekable<Iter<'a, Token>>) -> Self {
-        Parser { iter }
+        Parser {
+            iter,
+            whitelist: None,
+        }
+    }
+
+    pub fn set_whitelist(mut self, whitelist: &'a Vec<&'a str>) -> Self {
+        self.whitelist = Some(whitelist);
+        self
     }
 
     fn assert_next(&mut self, token: Token) -> Result {
@@ -167,6 +176,14 @@ impl<'a> Parser<'a> {
 
         match next {
             Token::Var(v) => {
+                if let Some(whitelist) = self.whitelist {
+                    if !whitelist.contains(&(*v).as_str()) {
+                        return Err(SyntaxError::new_parse_error(format!(
+                            "Token not in whitelist {:?}",
+                            v
+                        )));
+                    }
+                }
                 let comparison_operator =
                     ComparisonOperators::try_from(self.iter.next().unwrap()).unwrap();
 
@@ -481,5 +498,30 @@ mod tests {
             },
             filter
         );
+    }
+
+    #[test]
+    fn whitelist() {
+        let tokens = vec![
+            Token::Var("name".to_owned()),
+            Token::EqualEqual,
+            Token::String("Ricardo".to_owned()),
+            Token::And,
+            Token::Var("age".to_owned()),
+            Token::EqualEqual,
+            Token::Integer(10),
+            Token::Or,
+            Token::Var("active".to_owned()),
+            Token::EqualEqual,
+            Token::Boolean(false),
+            Token::End,
+        ];
+
+        let mut token_iter = tokens.iter().peekable();
+        let whitelist = vec!["name", "age"];
+        let parser = Parser::new(&mut token_iter).set_whitelist(&whitelist);
+        let expression = parser.parse();
+
+        assert!(expression.is_err());
     }
 }
