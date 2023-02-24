@@ -10,27 +10,33 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq, Eq)]
-enum ComparisonOperators {
+pub enum ComparisonOperators {
     EqualEqual,
+    NotEqual,
     GreaterThan,
+    GreaterThanOrEqual,
     LessThan,
+    LessThanOrEqual,
 }
 
-impl TryFrom<Token> for ComparisonOperators {
+impl TryFrom<&Token> for ComparisonOperators {
     type Error = &'static str;
 
-    fn try_from(token: Token) -> std::result::Result<Self, Self::Error> {
+    fn try_from(token: &Token) -> std::result::Result<Self, Self::Error> {
         match token {
             Token::EqualEqual => Ok(ComparisonOperators::EqualEqual),
+            Token::NotEqual => Ok(ComparisonOperators::NotEqual),
             Token::GreaterThan => Ok(ComparisonOperators::GreaterThan),
+            Token::GreaterThanOrEqual => Ok(ComparisonOperators::GreaterThanOrEqual),
             Token::LessThan => Ok(ComparisonOperators::LessThan),
+            Token::LessThanOrEqual => Ok(ComparisonOperators::LessThanOrEqual),
             _ => Err("Can only convert comparison operators"),
         }
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum LogicalOperators {
+pub enum LogicalOperators {
     And,
     Or,
 }
@@ -48,33 +54,33 @@ impl TryFrom<Token> for LogicalOperators {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum Value {
+pub enum Value {
     String(String),
     Integer(i32),
     Boolean(bool),
 }
 
-impl TryFrom<Token> for Value {
+impl TryFrom<&Token> for Value {
     type Error = &'static str;
 
-    fn try_from(token: Token) -> std::result::Result<Self, Self::Error> {
+    fn try_from(token: &Token) -> std::result::Result<Self, Self::Error> {
         match token {
-            Token::String(v) => Ok(Value::String(v)),
-            Token::Integer(v) => Ok(Value::Integer(v)),
-            Token::Boolean(v) => Ok(Value::Boolean(v)),
+            Token::String(v) => Ok(Value::String(v.to_owned())),
+            Token::Integer(v) => Ok(Value::Integer(v.to_owned())),
+            Token::Boolean(v) => Ok(Value::Boolean(v.to_owned())),
             _ => Err("Can only convert logical operators"),
         }
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum Expression {
+pub enum Expression {
     LogicalOperators(LogicalOperators, Box<Expression>, Box<Expression>),
     ComparisonOperators(ComparisonOperators, String, Value),
 }
 
 impl Expression {
-    fn eval(mut self) -> Result<Document> {
+    pub fn eval(self) -> Result<Document> {
         match self {
             Expression::ComparisonOperators(comparison_operator, field, value) => {
                 match comparison_operator {
@@ -83,9 +89,31 @@ impl Expression {
                         Value::Integer(v) => Ok(doc! { field: v}),
                         Value::Boolean(v) => Ok(doc! { field: v}),
                     },
-                    _ => Err(SyntaxError::new_parse_error(
-                        "Invalid Expression".to_string(),
-                    )),
+                    ComparisonOperators::NotEqual => match value {
+                        Value::String(v) => Ok(doc! { field: { "$ne": v }}),
+                        Value::Integer(v) => Ok(doc! { field: { "$ne": v }}),
+                        Value::Boolean(v) => Ok(doc! { field: { "$ne": v }}),
+                    },
+                    ComparisonOperators::GreaterThan => match value {
+                        Value::String(v) => Ok(doc! { field: { "$gt": v }}),
+                        Value::Integer(v) => Ok(doc! { field: { "$gt": v }}),
+                        Value::Boolean(v) => Ok(doc! { field: { "$gt": v }}),
+                    },
+                    ComparisonOperators::GreaterThanOrEqual => match value {
+                        Value::String(v) => Ok(doc! { field: { "$gte": v }}),
+                        Value::Integer(v) => Ok(doc! { field: { "$gte": v }}),
+                        Value::Boolean(v) => Ok(doc! { field: { "$gte": v }}),
+                    },
+                    ComparisonOperators::LessThan => match value {
+                        Value::String(v) => Ok(doc! { field: { "$lt": v }}),
+                        Value::Integer(v) => Ok(doc! { field: { "$lt": v }}),
+                        Value::Boolean(v) => Ok(doc! { field: { "$lt": v }}),
+                    },
+                    ComparisonOperators::LessThanOrEqual => match value {
+                        Value::String(v) => Ok(doc! { field: { "$lte": v }}),
+                        Value::Integer(v) => Ok(doc! { field: { "$lte": v }}),
+                        Value::Boolean(v) => Ok(doc! { field: { "$lte": v }}),
+                    },
                 }
             }
             Expression::LogicalOperators(logical_operator, expr, rhs) => match logical_operator {
@@ -101,23 +129,17 @@ impl Expression {
                     d1.extend(d2);
                     Ok(d1)
                 }
-                _ => Err(SyntaxError::new_parse_error(
-                    "Invalid Expression".to_string(),
-                )),
             },
-            _ => Err(SyntaxError::new_parse_error(
-                "Invalid Expression".to_string(),
-            )),
         }
     }
 }
 
-struct Parser<'a> {
+pub struct Parser<'a> {
     iter: &'a mut Peekable<Iter<'a, Token>>,
 }
 
 impl<'a> Parser<'a> {
-    fn new(iter: &'a mut Peekable<Iter<'a, Token>>) -> Self {
+    pub fn new(iter: &'a mut Peekable<Iter<'a, Token>>) -> Self {
         Parser { iter }
     }
 
@@ -140,22 +162,15 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    fn primary(&mut self) -> Result<Expression> {
+    fn and(&mut self) -> Result<Expression> {
         let next = self.iter.next().unwrap();
 
         match next {
             Token::Var(v) => {
-                let comparison_operator = match self.iter.next().unwrap() {
-                    Token::EqualEqual => ComparisonOperators::EqualEqual,
-                    _ => todo!(),
-                };
+                let comparison_operator =
+                    ComparisonOperators::try_from(self.iter.next().unwrap()).unwrap();
 
-                let value = match self.iter.next().unwrap() {
-                    Token::String(v) => Value::String(v.to_owned()),
-                    Token::Integer(v) => Value::Integer(v.to_owned()),
-                    Token::Boolean(v) => Value::Boolean(v.to_owned()),
-                    _ => todo!(),
-                };
+                let value = Value::try_from(self.iter.next().unwrap()).unwrap();
 
                 return Ok(Expression::ComparisonOperators(
                     comparison_operator,
@@ -163,7 +178,6 @@ impl<'a> Parser<'a> {
                     value,
                 ));
             }
-
             // Token::RightParen => {
             //     let expr = self.expression()?;
             //     self.assert_next(Token::LeftParen)?;
@@ -176,15 +190,13 @@ impl<'a> Parser<'a> {
                 )))
             }
         }
-
-        todo!();
     }
 
-    fn and(&mut self) -> Result<Expression> {
-        let mut expr: Expression = self.primary()?;
+    // fn and(&mut self) -> Result<Expression> {
+    //     let mut expr: Expression = self.primary()?;
 
-        Ok(expr)
-    }
+    //     Ok(expr)
+    // }
 
     fn or(&mut self) -> Result<Expression> {
         let mut expr: Expression = self.and()?;
@@ -261,6 +273,22 @@ mod tests {
     }
 
     #[test]
+    fn string_nq() {
+        let tokens = vec![
+            Token::Var("name".to_owned()),
+            Token::NotEqual,
+            Token::String("Ricardo".to_owned()),
+            Token::End,
+        ];
+        let mut token_iter = tokens.iter().peekable();
+        let parser = Parser::new(&mut token_iter);
+        let expression = parser.parse().unwrap();
+
+        let filter = expression.eval().unwrap();
+        assert_eq!(doc! { "name": { "$ne": "Ricardo"} }, filter);
+    }
+
+    #[test]
     fn integer_eq() {
         let tokens = vec![
             Token::Var("age".to_owned()),
@@ -277,6 +305,70 @@ mod tests {
     }
 
     #[test]
+    fn integer_gt() {
+        let tokens = vec![
+            Token::Var("age".to_owned()),
+            Token::GreaterThan,
+            Token::Integer(10),
+            Token::End,
+        ];
+        let mut token_iter = tokens.iter().peekable();
+        let parser = Parser::new(&mut token_iter);
+        let expression = parser.parse().unwrap();
+
+        let filter = expression.eval().unwrap();
+        assert_eq!(doc! { "age": { "$gt": 10 } }, filter);
+    }
+
+    #[test]
+    fn integer_gte() {
+        let tokens = vec![
+            Token::Var("age".to_owned()),
+            Token::GreaterThanOrEqual,
+            Token::Integer(10),
+            Token::End,
+        ];
+        let mut token_iter = tokens.iter().peekable();
+        let parser = Parser::new(&mut token_iter);
+        let expression = parser.parse().unwrap();
+
+        let filter = expression.eval().unwrap();
+        assert_eq!(doc! { "age": { "$gte": 10 } }, filter);
+    }
+
+    #[test]
+    fn integer_lt() {
+        let tokens = vec![
+            Token::Var("age".to_owned()),
+            Token::LessThan,
+            Token::Integer(10),
+            Token::End,
+        ];
+        let mut token_iter = tokens.iter().peekable();
+        let parser = Parser::new(&mut token_iter);
+        let expression = parser.parse().unwrap();
+
+        let filter = expression.eval().unwrap();
+        assert_eq!(doc! { "age": { "$lt": 10 } }, filter);
+    }
+
+    #[test]
+    fn integer_lte() {
+        let tokens = vec![
+            Token::Var("age".to_owned()),
+            Token::LessThanOrEqual,
+            Token::Integer(10),
+            Token::End,
+        ];
+        let mut token_iter = tokens.iter().peekable();
+        let parser = Parser::new(&mut token_iter);
+        let expression = parser.parse().unwrap();
+
+        let filter = expression.eval().unwrap();
+        assert_eq!(doc! { "age": { "$lte": 10 } }, filter);
+    }
+
+    #[test]
     fn boolean_eq() {
         let tokens = vec![
             Token::Var("active".to_owned()),
@@ -290,6 +382,22 @@ mod tests {
 
         let filter = expression.eval().unwrap();
         assert_eq!(doc! { "active": false }, filter);
+    }
+
+    #[test]
+    fn boolean_ne() {
+        let tokens = vec![
+            Token::Var("active".to_owned()),
+            Token::NotEqual,
+            Token::Boolean(false),
+            Token::End,
+        ];
+        let mut token_iter = tokens.iter().peekable();
+        let parser = Parser::new(&mut token_iter);
+        let expression = parser.parse().unwrap();
+
+        let filter = expression.eval().unwrap();
+        assert_eq!(doc! { "active": { "$ne": false } }, filter);
     }
 
     #[test]
