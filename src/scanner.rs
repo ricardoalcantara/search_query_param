@@ -115,7 +115,6 @@ impl Scanner {
                     )))
                 }
             };
-            println!("{token:?}");
             tokens.push(token)
         }
 
